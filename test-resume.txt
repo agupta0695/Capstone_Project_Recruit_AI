@@ -1,0 +1,34 @@
+John Doe
+Software Engineer
+
+Email: john.doe@example.com
+Phone: +91-9876543210
+
+SKILLS
+- JavaScript
+- React
+- Node.js
+- TypeScript
+- Python
+- SQL
+- AWS
+- Docker
+
+EXPERIENCE
+Senior Software Engineer at Tech Corp (2020-2023)
+- Built scalable web applications using React and Node.js
+- Implemented microservices architecture with Docker and Kubernetes
+- Led a team of 5 developers
+
+Software Engineer at StartupXYZ (2018-2020)
+- Developed REST APIs using Node.js and Express
+- Worked with PostgreSQL and MongoDB databases
+- Implemented CI/CD pipelines
+
+EDUCATION
+Bachelor of Technology in Computer Science
+Indian Institute of Technology, Delhi (2014-2018)
+
+CERTIFICATIONS
+- AWS Certified Solutions Architect
+- MongoDB Certified Developer

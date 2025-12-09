@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String        @id @default(uuid())
+  email     String        @unique
+  name      String
+  company   String
+  role      String        @default("hr_user")
+  password  String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  roles     Role[]
+  settings  UserSettings?
+
+  @@map("users")
+}
+
+model UserSettings {
+  id                           String   @id @default(uuid())
+  userId                       String   @unique
+  requireShortlistApproval     Boolean  @default(true)
+  requireSchedulingApproval    Boolean  @default(true)
+  requireBulkRejectionApproval Boolean  @default(true)
+  confidenceThreshold          Int      @default(80)
+  workingHoursStart            String   @default("09:00")
+  workingHoursEnd              String   @default("18:00")
+  timezone                     String   @default("Asia/Kolkata")
+  interviewDuration            Int      @default(60)
+  bufferTime                   Int      @default(15)
+  emailNotifications           Boolean  @default(true)
+  inAppNotifications           Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  user                         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model Role {
+  id                 String      @id @default(uuid())
+  userId             String
+  title              String
+  department         String
+  description        String
+  status             String      @default("active")
+  evaluationCriteria Json
+  totalCandidates    Int         @default(0)
+  screened           Int         @default(0)
+  shortlisted        Int         @default(0)
+  interviewed        Int         @default(0)
+  rejected           Int         @default(0)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  candidates         Candidate[]
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("roles")
+}
+
+model Candidate {
+  id             String      @id @default(uuid())
+  roleId         String
+  profile        Json
+  evaluation     Json?
+  status         String      @default("new")
+  source         String      @default("upload")
+  appliedAt      DateTime    @default(now())
+  overridden     Boolean     @default(false)
+  overrideReason String?
+  notes          String?
+  statusHistory  Json        @default("[]")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  role           Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  interviews     Interview[]
+
+  @@map("candidates")
+}
+
+model Interview {
+  id              String    @id @default(uuid())
+  candidateId     String
+  roleId          String
+  scheduledAt     DateTime
+  duration        Int
+  status          String    @default("pending_confirmation")
+  calendarEventId String?
+  emailThreadId   String?
+  reminderSentAt  DateTime?
+  confirmedAt     DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("interviews")
+}
+
+model ReasoningLog {
+  id              String   @id @default(uuid())
+  timestamp       DateTime @default(now())
+  actionType      String
+  entityId        String
+  entityName      String
+  inputData       Json
+  outputData      Json
+  reasoning       String
+  confidenceScore Int
+  status          String
+  errorMessage    String?
+
+  @@index([actionType])
+  @@index([entityId])
+  @@index([timestamp])
+  @@map("reasoning_logs")
+}
+
+model Integration {
+  id           String    @id @default(uuid())
+  userId       String
+  provider     String
+  status       String    @default("connected")
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  scopes       String[]
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@map("integrations")
+}
