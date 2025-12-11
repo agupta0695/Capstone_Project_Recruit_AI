@@ -1,0 +1,85 @@
+{
+  "name": "JD Parser",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "parse-jd",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "parse-jd"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2000
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "Extract structured information from this job description. Return ONLY valid JSON with no markdown or explanations.\n\nJob Description:\n{{ $json.body.description }}\n\nExtract:\n{\n  \"requiredSkills\": [\"React\", \"Node.js\", \"TypeScript\"],\n  \"niceToHaveSkills\": [\"Python\", \"AWS\", \"Docker\"],\n  \"experienceLevel\": \"Senior\",\n  \"educationLevel\": \"Bachelor's\",\n  \"responsibilities\": [\n    \"Develop web applications\",\n    \"Lead technical decisions\",\n    \"Mentor junior developers\"\n  ],\n  \"qualifications\": [\n    \"5+ years experience\",\n    \"Strong problem-solving skills\",\n    \"Team collaboration\"\n  ],\n  \"workMode\": \"Remote\",\n  \"salaryRange\": \"$120k-$150k\",\n  \"benefits\": [\"Health insurance\", \"401k\", \"PTO\"],\n  \"summary\": \"Senior developer role focusing on React and Node.js development\"\n}\n\nRules:\n- Extract actual skills mentioned, don't add assumptions\n- Use standard experience levels: Entry, Mid-Level, Senior, Lead, Principal\n- Use standard education levels: High School, Associate, Bachelor's, Master's, PhD\n- Include salary range if mentioned\n- List specific responsibilities and qualifications\n- Return valid JSON only"
+            }
+          ]
+        }
+      },
+      "id": "ai-agent-node",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"data\": $json.output } }}"
+      },
+      "id": "respond-webhook-node",
+      "name": "Respond to Webhook", 
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Chat Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}

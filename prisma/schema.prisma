@@ -138,3 +138,60 @@ model Integration {
   @@unique([userId, provider])
   @@map("integrations")
 }
+
+model WorkflowExecution {
+  id               String   @id @default(uuid())
+  candidateId      String
+  roleId           String
+  userId           String
+  status           String
+  decisions        Json
+  generatedContent Json
+  startTime        DateTime
+  endTime          DateTime?
+  totalDuration    Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("workflow_executions")
+}
+
+model EmailDraft {
+  id           String    @id @default(uuid())
+  userId       String
+  type         String
+  to           String
+  cc           String[]  @default([])
+  subject      String
+  body         String
+  attachments  String[]  @default([])
+  scheduledSend DateTime?
+  priority     String    @default("normal")
+  tags         String[]  @default([])
+  status       String    @default("draft")
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("email_drafts")
+}
+
+model InterviewSchedule {
+  id               String   @id @default(uuid())
+  candidateId      String
+  roleId           String
+  userId           String
+  interviewerId    String
+  interviewerName  String
+  interviewerEmail String
+  scheduledTime    DateTime
+  duration         Int
+  type             String
+  meetingLink      String?
+  status           String   @default("scheduled")
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("interview_schedules")
+}

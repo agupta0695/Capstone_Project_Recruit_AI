@@ -1,0 +1,85 @@
+{
+  "name": "Candidate Evaluator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "evaluate-candidate",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "evaluate-candidate"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4000
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "You are an expert technical recruiter and hiring manager. Perform a comprehensive evaluation of this candidate against the job requirements.\n\nCANDIDATE PROFILE:\nName: {{ $json.body.candidateProfile.name }}\nSkills: {{ $json.body.candidateProfile.skills }}\nExperience: {{ $json.body.candidateProfile.experience }}\nEducation: {{ $json.body.candidateProfile.education }}\nSummary: {{ $json.body.candidateProfile.summary }}\n\nJOB REQUIREMENTS:\nTitle: {{ $json.body.jobRequirements.title }}\nRequired Skills: {{ $json.body.jobRequirements.requiredSkills }}\nNice-to-Have Skills: {{ $json.body.jobRequirements.niceToHaveSkills }}\nExperience Level: {{ $json.body.jobRequirements.experienceLevel }}\nEducation Level: {{ $json.body.jobRequirements.educationLevel }}\nResponsibilities: {{ $json.body.jobRequirements.responsibilities }}\n\nProvide a detailed evaluation in JSON format:\n{\n  \"overallScore\": 85,\n  \"confidence\": 90,\n  \"recommendation\": \"Strongly Recommend | Recommend | Consider | Not Recommended\",\n  \"matchedSkills\": [\"React\", \"Node.js\", \"TypeScript\"],\n  \"missingSkills\": [\"AWS\"],\n  \"strengths\": [\n    \"Strong technical background in required technologies\",\n    \"Relevant experience level\",\n    \"Good educational background\"\n  ],\n  \"concerns\": [\n    \"Missing AWS experience\",\n    \"Limited cloud infrastructure knowledge\"\n  ],\n  \"cultureFit\": {\n    \"score\": 80,\n    \"reasoning\": \"Shows leadership and collaboration skills\"\n  },\n  \"technicalFit\": {\n    \"score\": 90,\n    \"reasoning\": \"Strong match on core technical requirements\"\n  },\n  \"experienceFit\": {\n    \"score\": 85,\n    \"reasoning\": \"Experience level aligns well with senior role\"\n  },\n  \"detailedAnalysis\": {\n    \"technicalSkills\": \"Candidate demonstrates strong proficiency in React, Node.js, and TypeScript...\",\n    \"experience\": \"5 years of experience aligns well with senior role requirements...\",\n    \"education\": \"Bachelor's degree meets the educational requirements...\",\n    \"workHistory\": \"Previous roles show progressive responsibility and relevant experience...\"\n  },\n  \"interviewRecommendations\": {\n    \"focus\": [\"AWS experience\", \"Cloud architecture\", \"Team leadership\"],\n    \"questions\": [\n      \"Can you describe your experience with cloud platforms?\",\n      \"How have you mentored junior developers?\",\n      \"Tell us about a complex system you've architected\"\n    ]\n  },\n  \"nextSteps\": \"Schedule technical interview focusing on system design and cloud architecture\",\n  \"salaryExpectation\": \"Based on experience and skills, candidate likely expects $120k-$150k range\"\n}\n\nIMPORTANT:\n- Be thorough and objective\n- Consider both technical and soft skills\n- Provide actionable insights\n- Be honest about gaps\n- Return ONLY valid JSON, no markdown, no explanations"
+            }
+          ]
+        }
+      },
+      "id": "ai-agent-node",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"evaluation\": $json.output } }}"
+      },
+      "id": "respond-webhook-node", 
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Chat Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}

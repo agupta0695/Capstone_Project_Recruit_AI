@@ -58,7 +58,7 @@ const postData = JSON.stringify(testJD);
 const options = {
   hostname: 'localhost',
   port: 5678,
-  path: '/webhook-test/parser-jd',
+  path: '/webhook/parse-jd',
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -67,7 +67,7 @@ const options = {
 };
 
 console.log('🚀 Testing n8n JD Parser...');
-console.log('📍 URL: http://localhost:5678/webhook-test/parser-jd');
+console.log('📍 URL: http://localhost:5678/webhook/parse-jd');
 console.log('📦 Sending job description...\n');
 
 const req = http.request(options, (res) => {

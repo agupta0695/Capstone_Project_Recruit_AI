@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { parseResume } from '@/lib/n8n';
+import { handleFileError, createErrorDetails, logError } from '@/lib/errorNotifications';
 import pdf from 'pdf-parse';
 
 const prisma = new PrismaClient();
@@ -20,23 +21,54 @@ function verifyToken(request: NextRequest) {
   }
 }
 
-// Extract text from file
-async function extractTextFromFile(file: File): Promise<string> {
+// Extract text from file with enhanced error handling
+async function extractTextFromFile(file: File): Promise<{ text: string; error?: string }> {
   try {
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      const errorCode = handleFileError(new Error('File too large'), file.name, file.size);
+      return { text: '', error: errorCode };
+    }
+
+    // Check file type
+    const allowedTypes = ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowedExtensions = ['.pdf', '.txt', '.doc', '.docx'];
+    
+    const hasValidType = allowedTypes.includes(file.type);
+    const hasValidExtension = allowedExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+    
+    if (!hasValidType && !hasValidExtension) {
+      const errorCode = handleFileError(new Error('Unsupported file type'), file.name, file.size);
+      return { text: '', error: errorCode };
+    }
+
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
       // Handle PDF files
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const data = await pdf(buffer);
-      return data.text;
+      
+      if (!data.text || data.text.trim().length < 10) {
+        const errorCode = handleFileError(new Error('PDF appears to be empty or corrupted'), file.name, file.size);
+        return { text: '', error: errorCode };
+      }
+      
+      return { text: data.text };
     } else {
       // Handle text files
       const text = await file.text();
-      return text;
+      
+      if (!text || text.trim().length < 10) {
+        const errorCode = handleFileError(new Error('File appears to be empty'), file.name, file.size);
+        return { text: '', error: errorCode };
+      }
+      
+      return { text };
     }
   } catch (error) {
     console.error('Error extracting text:', error);
-    throw new Error('Failed to extract text from file');
+    const errorCode = handleFileError(error, file.name, file.size);
+    return { text: '', error: errorCode };
   }
 }
 
@@ -126,26 +158,49 @@ export async function POST(request: NextRequest) {
       console.log(`Processing file: ${file.name}, size: ${file.size}, type: ${file.type}`);
       
       try {
-        const text = await extractTextFromFile(file);
+        // Extract text with error handling
+        const { text, error: extractionError } = await extractTextFromFile(file);
+        
+        if (extractionError) {
+          results.push({ 
+            error: `Failed to process ${file.name}`,
+            errorCode: extractionError,
+            fileName: file.name 
+          });
+          continue;
+        }
+        
         console.log(`Extracted text length: ${text.length}`);
         
         // Try n8n parsing first, fallback to local parsing
-        let parsed = await parseResume(text, file.name);
+        const parseResult = await parseResume(text, file.name);
+        let parsed = parseResult.data;
         let score = 0;
         let matchedSkills: string[] = [];
         let strengths: string[] = [];
         let concerns: string[] = [];
+        let processingNotes: string[] = [];
         
-        if (!parsed) {
+        if (!parsed && parseResult.error?.shouldFallback) {
           console.log('n8n parsing failed, using fallback parser');
+          processingNotes.push('AI parsing unavailable - used basic parsing');
           parsed = parseResumeLocal(text);
           score = evaluateCandidate(parsed.skills, requiredSkills);
           matchedSkills = parsed.skills.filter(skill => 
             requiredSkills.some(req => req.toLowerCase() === skill.toLowerCase())
           );
+        } else if (!parsed) {
+          // No fallback available, return error
+          results.push({ 
+            error: `Failed to parse ${file.name}`,
+            errorCode: parseResult.error?.code || 'PARSING_FAILED',
+            fileName: file.name 
+          });
+          continue;
         } else {
           // Use n8n's comprehensive evaluation
           console.log(`Parsed by n8n: ${parsed.name}, skills: ${parsed.skills?.join(', ')}`);
+          processingNotes.push('AI parsing successful');
           
           // Calculate score based on skill match
           matchedSkills = (parsed.skills || []).filter(skill => 
@@ -183,17 +238,36 @@ export async function POST(request: NextRequest) {
               reasoning: strengths.length > 0 
                 ? `Strengths: ${strengths.join(', ')}. Concerns: ${concerns.join(', ')}`
                 : `Matched ${matchedSkills.length} of ${requiredSkills.length} required skills`,
+              processingNotes,
             },
             status,
             roleId,
           },
         });
 
-        results.push(candidate);
+        results.push({
+          ...candidate,
+          processingNotes,
+          aiParsingUsed: !parseResult.error
+        });
         console.log(`Created candidate: ${candidate.id}`);
       } catch (fileError) {
         console.error(`Error processing file ${file.name}:`, fileError);
-        results.push({ error: `Failed to process ${file.name}` });
+        
+        // Log structured error
+        const errorDetails = createErrorDetails(
+          'SERVER_ERROR',
+          { fileName: file.name, error: fileError },
+          user.userId,
+          'resume_upload'
+        );
+        logError(errorDetails);
+        
+        results.push({ 
+          error: `Failed to process ${file.name}`,
+          errorCode: 'SERVER_ERROR',
+          fileName: file.name 
+        });
       }
     }
 

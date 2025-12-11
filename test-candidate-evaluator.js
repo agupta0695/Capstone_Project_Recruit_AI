@@ -63,7 +63,7 @@ const postData = JSON.stringify(testData);
 const options = {
   hostname: 'localhost',
   port: 5678,
-  path: '/webhook-test/evaluate-candidate',
+  path: '/webhook/evaluate-candidate',
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ const options = {
 };
 
 console.log('🚀 Testing Candidate Evaluator Workflow...');
-console.log('📍 URL: http://localhost:5678/webhook-test/evaluate-candidate');
+console.log('📍 URL: http://localhost:5678/webhook/evaluate-candidate');
 console.log('📦 Evaluating candidate against job requirements...\n');
 
 const req = http.request(options, (res) => {

@@ -1,0 +1,122 @@
+{
+  "name": "Google Calendar Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "schedule-event",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-calendar",
+      "name": "Webhook - Schedule Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "schedule-event"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "create",
+        "calendarId": "primary",
+        "start": "={{ $json.startTime }}",
+        "end": "={{ $json.endTime }}",
+        "summary": "={{ $json.title }}",
+        "description": "={{ $json.description }}",
+        "location": "={{ $json.location || 'Online Meeting' }}",
+        "attendees": "={{ $json.attendees }}",
+        "options": {
+          "conferenceData": {
+            "createRequest": {
+              "requestId": "={{ $json.meetingId || 'meeting-' + Date.now() }}",
+              "conferenceSolutionKey": {
+                "type": "hangoutsMeet"
+              }
+            }
+          },
+          "sendUpdates": "all"
+        }
+      },
+      "id": "calendar-create",
+      "name": "Google Calendar - Create Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "googleCalendarOAuth2": {
+          "id": "calendar-oauth",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"eventId\": $json.id, \"meetingLink\": $json.hangoutLink || $json.conferenceData?.entryPoints?.[0]?.uri, \"startTime\": $json.start.dateTime, \"endTime\": $json.end.dateTime, \"attendees\": $json.attendees, \"createdAt\": new Date().toISOString() } }}"
+      },
+      "id": "response-success",
+      "name": "Response - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": $json.message || 'Failed to create calendar event', \"details\": $json } }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "response-error",
+      "name": "Response - Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 420]
+    }
+  ],
+  "connections": {
+    "Webhook - Schedule Request": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Create Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Create Event": {
+      "main": [
+        [
+          {
+            "node": "Response - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Response - Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "calendar-scheduler-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "calendar-scheduler",
+  "tags": []
+}

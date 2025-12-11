@@ -3,11 +3,14 @@
  * 
  * This module provides functions to interact with n8n workflows
  * for AI-powered resume parsing, JD parsing, and candidate evaluation.
+ * Includes comprehensive error handling and notifications.
  */
 
+import { handleN8nError, handleFileError, logError, createErrorDetails } from './errorNotifications';
+
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/parse-resume';
-const N8N_JD_WEBHOOK_URL = process.env.N8N_JD_WEBHOOK_URL || 'http://localhost:5678/webhook-test/parser-jd';
-const N8N_EVALUATOR_WEBHOOK_URL = process.env.N8N_EVALUATOR_WEBHOOK_URL || 'http://localhost:5678/webhook-test/evaluate-candidate';
+const N8N_JD_WEBHOOK_URL = process.env.N8N_JD_WEBHOOK_URL || 'http://localhost:5678/webhook/parse-jd';
+const N8N_EVALUATOR_WEBHOOK_URL = process.env.N8N_EVALUATOR_WEBHOOK_URL || 'http://localhost:5678/webhook/evaluate-candidate';
 const N8N_TIMEOUT = 30000; // 30 seconds
 
 interface ParsedResume {
@@ -51,7 +54,7 @@ interface CandidateEvaluation {
 export async function parseResume(
   text: string,
   fileName: string
-): Promise<ParsedResume | null> {
+): Promise<{ data: ParsedResume | null; error?: { code: string; shouldFallback: boolean } }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), N8N_TIMEOUT);
@@ -73,38 +76,52 @@ export async function parseResume(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.error('n8n resume parsing failed:', response.statusText);
-      return null;
+      const { errorCode, shouldFallback } = handleN8nError(
+        new Error(`HTTP ${response.status}: ${response.statusText}`),
+        'resume-parser',
+        { fileName, responseStatus: response.status }
+      );
+      return { data: null, error: { code: errorCode, shouldFallback } };
     }
 
     const result = await response.json();
     
     if (result.success && result.data) {
+      // Log successful parsing
+      console.log(`✅ Resume parsed successfully: ${result.data.name || 'Unknown'}`);
+      
       return {
-        name: result.data.name || 'Unknown',
-        email: result.data.email || '',
-        phone: result.data.phone || '',
-        skills: Array.isArray(result.data.skills) ? result.data.skills : [],
-        experience: result.data.experience || '',
-        education: result.data.education || '',
-        summary: result.data.summary,
-        strengths: Array.isArray(result.data.strengths) ? result.data.strengths : [],
-        concerns: Array.isArray(result.data.concerns) ? result.data.concerns : [],
-        matchScore: result.data.matchScore || 0,
-        workHistory: Array.isArray(result.data.workHistory) ? result.data.workHistory : [],
+        data: {
+          name: result.data.name || 'Unknown',
+          email: result.data.email || '',
+          phone: result.data.phone || '',
+          skills: Array.isArray(result.data.skills) ? result.data.skills : [],
+          experience: result.data.experience || '',
+          education: result.data.education || '',
+          summary: result.data.summary,
+          strengths: Array.isArray(result.data.strengths) ? result.data.strengths : [],
+          concerns: Array.isArray(result.data.concerns) ? result.data.concerns : [],
+          matchScore: result.data.matchScore || 0,
+          workHistory: Array.isArray(result.data.workHistory) ? result.data.workHistory : [],
+        }
       };
     }
 
-    return null;
+    // Invalid response format
+    const { errorCode, shouldFallback } = handleN8nError(
+      new Error('Invalid response format from n8n'),
+      'resume-parser',
+      { fileName, responseData: result }
+    );
+    return { data: null, error: { code: errorCode, shouldFallback } };
+
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        console.error('n8n resume parsing timeout');
-      } else {
-        console.error('n8n resume parsing error:', error.message);
-      }
-    }
-    return null;
+    const { errorCode, shouldFallback } = handleN8nError(
+      error,
+      'resume-parser',
+      { fileName, textLength: text.length }
+    );
+    return { data: null, error: { code: errorCode, shouldFallback } };
   }
 }
 
@@ -113,7 +130,7 @@ export async function parseResume(
  */
 export async function parseJobDescription(
   description: string
-): Promise<ParsedJD | null> {
+): Promise<{ data: ParsedJD | null; error?: { code: string; shouldFallback: boolean } }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), N8N_TIMEOUT);
@@ -132,34 +149,48 @@ export async function parseJobDescription(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.error('n8n JD parsing failed:', response.statusText);
-      return null;
+      const { errorCode, shouldFallback } = handleN8nError(
+        new Error(`HTTP ${response.status}: ${response.statusText}`),
+        'jd-parser',
+        { descriptionLength: description.length, responseStatus: response.status }
+      );
+      return { data: null, error: { code: errorCode, shouldFallback } };
     }
 
     const result = await response.json();
     
     if (result.success && result.data) {
+      // Log successful parsing
+      console.log(`✅ JD parsed successfully: ${result.data.requiredSkills?.length || 0} required skills found`);
+      
       return {
-        requiredSkills: Array.isArray(result.data.requiredSkills) ? result.data.requiredSkills : [],
-        niceToHaveSkills: Array.isArray(result.data.niceToHaveSkills) ? result.data.niceToHaveSkills : [],
-        experienceLevel: result.data.experienceLevel || 'Mid-Level',
-        educationLevel: result.data.educationLevel || "Bachelor's",
-        responsibilities: Array.isArray(result.data.responsibilities) ? result.data.responsibilities : [],
-        qualifications: Array.isArray(result.data.qualifications) ? result.data.qualifications : [],
-        summary: result.data.summary || '',
+        data: {
+          requiredSkills: Array.isArray(result.data.requiredSkills) ? result.data.requiredSkills : [],
+          niceToHaveSkills: Array.isArray(result.data.niceToHaveSkills) ? result.data.niceToHaveSkills : [],
+          experienceLevel: result.data.experienceLevel || 'Mid-Level',
+          educationLevel: result.data.educationLevel || "Bachelor's",
+          responsibilities: Array.isArray(result.data.responsibilities) ? result.data.responsibilities : [],
+          qualifications: Array.isArray(result.data.qualifications) ? result.data.qualifications : [],
+          summary: result.data.summary || '',
+        }
       };
     }
 
-    return null;
+    // Invalid response format
+    const { errorCode, shouldFallback } = handleN8nError(
+      new Error('Invalid response format from n8n'),
+      'jd-parser',
+      { descriptionLength: description.length, responseData: result }
+    );
+    return { data: null, error: { code: errorCode, shouldFallback } };
+
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        console.error('n8n JD parsing timeout');
-      } else {
-        console.error('n8n JD parsing error:', error.message);
-      }
-    }
-    return null;
+    const { errorCode, shouldFallback } = handleN8nError(
+      error,
+      'jd-parser',
+      { descriptionLength: description.length }
+    );
+    return { data: null, error: { code: errorCode, shouldFallback } };
   }
 }
 
@@ -169,7 +200,7 @@ export async function parseJobDescription(
 export async function evaluateCandidate(
   candidateProfile: any,
   jobRequirements: any
-): Promise<CandidateEvaluation | null> {
+): Promise<{ data: CandidateEvaluation | null; error?: { code: string; shouldFallback: boolean } }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), N8N_TIMEOUT);
@@ -189,35 +220,63 @@ export async function evaluateCandidate(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.error('n8n candidate evaluation failed:', response.statusText);
-      return null;
+      const { errorCode, shouldFallback } = handleN8nError(
+        new Error(`HTTP ${response.status}: ${response.statusText}`),
+        'candidate-evaluator',
+        { 
+          candidateName: candidateProfile?.name,
+          jobTitle: jobRequirements?.title,
+          responseStatus: response.status 
+        }
+      );
+      return { data: null, error: { code: errorCode, shouldFallback } };
     }
 
     const result = await response.json();
     
-    if (result.success && result.data) {
+    if (result.overallScore !== undefined || (result.success && result.evaluation)) {
+      // Handle direct evaluation response or wrapped response
+      const evaluation = result.evaluation || result;
+      
+      // Log successful evaluation
+      console.log(`✅ Candidate evaluated successfully: ${evaluation.overallScore || evaluation.score}/100`);
+      
       return {
-        score: result.data.score || 0,
-        confidence: result.data.confidence || 0,
-        matchedSkills: Array.isArray(result.data.matchedSkills) ? result.data.matchedSkills : [],
-        missingSkills: Array.isArray(result.data.missingSkills) ? result.data.missingSkills : [],
-        strengths: Array.isArray(result.data.strengths) ? result.data.strengths : [],
-        gaps: Array.isArray(result.data.gaps) ? result.data.gaps : [],
-        reasoning: result.data.reasoning || 'No reasoning provided',
-        recommendation: result.data.recommendation || 'Review',
+        data: {
+          score: evaluation.overallScore || evaluation.score || 0,
+          confidence: evaluation.confidence || 0,
+          matchedSkills: Array.isArray(evaluation.matchedSkills) ? evaluation.matchedSkills : [],
+          missingSkills: Array.isArray(evaluation.missingSkills) ? evaluation.missingSkills : [],
+          strengths: Array.isArray(evaluation.strengths) ? evaluation.strengths : [],
+          gaps: Array.isArray(evaluation.concerns) ? evaluation.concerns : Array.isArray(evaluation.gaps) ? evaluation.gaps : [],
+          reasoning: evaluation.detailedAnalysis?.technicalSkills || evaluation.reasoning || 'No reasoning provided',
+          recommendation: evaluation.recommendation || 'Review',
+        }
       };
     }
 
-    return null;
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        console.error('n8n candidate evaluation timeout');
-      } else {
-        console.error('n8n candidate evaluation error:', error.message);
+    // Invalid response format
+    const { errorCode, shouldFallback } = handleN8nError(
+      new Error('Invalid response format from n8n'),
+      'candidate-evaluator',
+      { 
+        candidateName: candidateProfile?.name,
+        jobTitle: jobRequirements?.title,
+        responseData: result 
       }
-    }
-    return null;
+    );
+    return { data: null, error: { code: errorCode, shouldFallback } };
+
+  } catch (error) {
+    const { errorCode, shouldFallback } = handleN8nError(
+      error,
+      'candidate-evaluator',
+      { 
+        candidateName: candidateProfile?.name,
+        jobTitle: jobRequirements?.title
+      }
+    );
+    return { data: null, error: { code: errorCode, shouldFallback } };
   }
 }
 

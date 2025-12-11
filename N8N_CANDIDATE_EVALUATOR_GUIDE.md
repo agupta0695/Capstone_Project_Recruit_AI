@@ -265,7 +265,7 @@ const postData = JSON.stringify(testData);
 const options = {
   hostname: 'localhost',
   port: 5678,
-  path: '/webhook-test/evaluate-candidate',
+  path: '/webhook/evaluate-candidate',
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -326,7 +326,7 @@ const N8N_EVALUATOR_WEBHOOK_URL = process.env.N8N_EVALUATOR_WEBHOOK_URL || 'http
 ### Update .env
 
 ```bash
-N8N_EVALUATOR_WEBHOOK_URL="http://localhost:5678/webhook-test/evaluate-candidate"
+N8N_EVALUATOR_WEBHOOK_URL="http://localhost:5678/webhook/evaluate-candidate"
 ```
 
 ### Use in Candidate Detail Page
