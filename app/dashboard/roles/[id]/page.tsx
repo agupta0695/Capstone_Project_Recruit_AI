@@ -450,3 +450,6 @@ export default function RoleDetailPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}

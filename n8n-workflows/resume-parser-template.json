@@ -1,0 +1,104 @@
+{
+  "name": "HireAI - Resume Parser",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "parse-resume",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "parse-resume"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert resume parser. Extract information accurately and return ONLY valid JSON."
+            },
+            {
+              "role": "user",
+              "content": "=Extract the following information from this resume in JSON format:\n\n{\n  \"name\": \"Full name\",\n  \"email\": \"Email address\",\n  \"phone\": \"Phone number\",\n  \"skills\": [\"skill1\", \"skill2\"],\n  \"experience\": \"Years of experience or description\",\n  \"education\": \"Highest education level\",\n  \"summary\": \"Brief professional summary\"\n}\n\nResume text:\n{{ $json.text }}\n\nReturn ONLY valid JSON, no additional text."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "name": "OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst output = [];\n\nfor (const item of items) {\n  try {\n    const aiResponse = item.json.message?.content || item.json.text;\n    \n    // Try to extract JSON from markdown code blocks\n    let jsonText = aiResponse;\n    const jsonMatch = aiResponse.match(/```json\\n([\\s\\S]*?)\\n```/);\n    if (jsonMatch) {\n      jsonText = jsonMatch[1];\n    }\n    \n    const parsed = JSON.parse(jsonText);\n    \n    output.push({\n      json: {\n        success: true,\n        data: {\n          name: parsed.name || 'Unknown',\n          email: parsed.email || '',\n          phone: parsed.phone || '',\n          skills: Array.isArray(parsed.skills) ? parsed.skills : [],\n          experience: parsed.experience || '',\n          education: parsed.education || '',\n          summary: parsed.summary || ''\n        }\n      }\n    });\n  } catch (error) {\n    output.push({\n      json: {\n        success: false,\n        error: error.message,\n        rawResponse: item.json\n      }\n    });\n  }\n}\n\nreturn output;"
+      },
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-12-09T00:00:00.000Z",
+  "versionId": "1"
+}

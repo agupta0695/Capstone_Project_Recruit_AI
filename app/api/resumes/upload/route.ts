@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
+import { parseResume } from '@/lib/n8n';
+import pdf from 'pdf-parse';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'your-secret-key';
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/parse-resume';
 
 function verifyToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -20,16 +23,25 @@ function verifyToken(request: NextRequest) {
 // Extract text from file
 async function extractTextFromFile(file: File): Promise<string> {
   try {
-    const text = await file.text();
-    return text;
+    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      // Handle PDF files
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const data = await pdf(buffer);
+      return data.text;
+    } else {
+      // Handle text files
+      const text = await file.text();
+      return text;
+    }
   } catch (error) {
     console.error('Error extracting text:', error);
     throw new Error('Failed to extract text from file');
   }
 }
 
-// Parse resume text
-function parseResume(text: string) {
+// Local fallback parser
+function parseResumeLocal(text: string) {
   const emailRegex = /[\w.-]+@[\w.-]+\.\w+/;
   const phoneRegex = /[\d\s()+-]{10,}/;
   
@@ -49,7 +61,7 @@ function parseResume(text: string) {
     }
   });
 
-  return { name, email, phone, skills };
+  return { name, email, phone, skills, experience: '', education: '' };
 }
 
 // Evaluate candidate
@@ -117,11 +129,38 @@ export async function POST(request: NextRequest) {
         const text = await extractTextFromFile(file);
         console.log(`Extracted text length: ${text.length}`);
         
-        const parsed = parseResume(text);
-        console.log(`Parsed: ${parsed.name}, skills: ${parsed.skills.join(', ')}`);
+        // Try n8n parsing first, fallback to local parsing
+        let parsed = await parseResume(text, file.name);
+        let score = 0;
+        let matchedSkills: string[] = [];
+        let strengths: string[] = [];
+        let concerns: string[] = [];
         
-        const score = evaluateCandidate(parsed.skills, requiredSkills);
-        console.log(`Score: ${score}`);
+        if (!parsed) {
+          console.log('n8n parsing failed, using fallback parser');
+          parsed = parseResumeLocal(text);
+          score = evaluateCandidate(parsed.skills, requiredSkills);
+          matchedSkills = parsed.skills.filter(skill => 
+            requiredSkills.some(req => req.toLowerCase() === skill.toLowerCase())
+          );
+        } else {
+          // Use n8n's comprehensive evaluation
+          console.log(`Parsed by n8n: ${parsed.name}, skills: ${parsed.skills?.join(', ')}`);
+          
+          // Calculate score based on skill match
+          matchedSkills = (parsed.skills || []).filter(skill => 
+            requiredSkills.some(req => req.toLowerCase() === skill.toLowerCase())
+          );
+          score = requiredSkills.length > 0 
+            ? Math.round((matchedSkills.length / requiredSkills.length) * 100)
+            : 50;
+          
+          // Get strengths and concerns from parsed data if available
+          strengths = (parsed as any).strengths || [];
+          concerns = (parsed as any).concerns || [];
+        }
+        
+        console.log(`Score: ${score}, Matched: ${matchedSkills.length}/${requiredSkills.length}`);
         
         let status = 'Rejected';
         if (score >= 70) status = 'Shortlisted';
@@ -130,18 +169,20 @@ export async function POST(request: NextRequest) {
         const candidate = await prisma.candidate.create({
           data: {
             profile: {
-              name: parsed.name,
-              email: parsed.email,
-              phone: parsed.phone,
+              name: parsed.name || 'Unknown',
+              email: parsed.email || '',
+              phone: parsed.phone || '',
               resumeUrl: file.name,
-              skills: parsed.skills,
-              experience: '',
-              education: '',
+              skills: parsed.skills || [],
+              experience: parsed.experience || '',
+              education: parsed.education || '',
             },
             evaluation: {
               score,
-              matchedSkills: parsed.skills,
-              reasoning: `Matched ${parsed.skills.length} skills from required: ${requiredSkills.join(', ')}`,
+              matchedSkills,
+              reasoning: strengths.length > 0 
+                ? `Strengths: ${strengths.join(', ')}. Concerns: ${concerns.join(', ')}`
+                : `Matched ${matchedSkills.length} of ${requiredSkills.length} required skills`,
             },
             status,
             roleId,
