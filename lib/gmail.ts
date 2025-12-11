@@ -2,7 +2,7 @@
 import { google } from 'googleapis';
 import prisma from './prisma';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { parseResume } from '@/lib/types'; // adjust path if your n8n methods are in another file
+import { parseResume } from '@/lib/n8n'; // adjust path if your n8n methods are in another file
 import { createErrorDetails, logError } from './errorNotifications';
 
 const S3_BUCKET = process.env.AWS_S3_BUCKET!;
