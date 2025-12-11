@@ -1,0 +1,35 @@
+// app/api/integrations/google/callback/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { exchangeCodeAndSaveIntegration } from '@/lib/gmail';
+import { verifyTokenFromCookie } from '@/lib/auth'; // helper that reads cookie and returns user payload (you said you'd add this earlier)
+import prisma from '@/lib/prisma';
+
+export async function GET(req: NextRequest) {
+  try {
+    const url = new URL(req.url);
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+
+    // Identify user from cookie/session
+    // verifyTokenFromCookie should read cookie and return { sub: userId } or null
+    // if you use NextAuth, adapt accordingly
+    const userPayload = verifyTokenFromCookie(req);
+    if (!userPayload) {
+      return NextResponse.redirect('/auth/login');
+    }
+    const userId = (userPayload as any).sub;
+
+    if (!code) {
+      return NextResponse.json({ error: 'Missing code' }, { status: 400 });
+    }
+
+    // Exchange code and store integration
+    await exchangeCodeAndSaveIntegration(userId, code);
+
+    // Redirect back to settings page
+    return NextResponse.redirect('/dashboard/settings?integrated=google');
+  } catch (err) {
+    console.error('Google callback error', err);
+    return NextResponse.redirect('/dashboard/settings?error=google_integration_failed');
+  }
+}
