@@ -1,3 +1,4 @@
+// app/components/Sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -14,7 +15,6 @@ export default function Sidebar({ userName }: SidebarProps) {
   // Logout: try server-side logout (cookie) then fallback to client-only
   const handleLogout = async () => {
     try {
-      // Call server logout to clear httpOnly cookie if present
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     } catch (err) {
       console.warn('Server logout failed (continuing client logout):', err);
