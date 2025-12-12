@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Sidebar from '../components/Sidebar';
+import Sidebar from '../../components/Sidebar';
 
 export default function DashboardLayout({
   children,
@@ -49,9 +49,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen">
       <Sidebar userName={userName} />
-      <main className="flex-1 overflow-y-auto bg-gray-50 ml-64">
+      <main className="flex-1 overflow-y-auto bg-gray-50">
         {children}
       </main>
     </div>

@@ -288,7 +288,17 @@ export async function checkN8nHealth(): Promise<boolean> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(`${N8N_BASE_URL}/health`, {
+    // Derive base URL from the webhook URL so we don't rely on a missing N8N_BASE_URL
+    const webhookUrl = N8N_WEBHOOK_URL;
+    let baseUrl: string;
+    try {
+      baseUrl = new URL(webhookUrl).origin;
+    } catch {
+      // fallback - if webhookUrl is a relative path, assume localhost
+      baseUrl = 'http://localhost:5678';
+    }
+
+    const response = await fetch(`${baseUrl}/health`, {
       method: 'GET',
       signal: controller.signal,
     });
